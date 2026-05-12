@@ -58,7 +58,29 @@ function showMessage(text, isError = true) {
 }
 
 function generateToken() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  if (window.crypto?.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+
+  const bytes = new Uint8Array(16);
+  if (window.crypto?.getRandomValues) {
+    window.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i += 1) {
+      bytes[i] = Math.floor(Math.random() * 256);
+    }
+  }
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function hashLocalPassword(password) {
+  if (window.crypto?.subtle) {
+    const encoded = new TextEncoder().encode(password);
+    const digest = await window.crypto.subtle.digest('SHA-256', encoded);
+    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  }
+
+  return btoa(unescape(encodeURIComponent(password)));
 }
 
 function loadLocalDb() {
@@ -116,11 +138,12 @@ async function localRequest(path, options = {}) {
   if (path === '/api/register' && method === 'POST') {
     const username = String(body.username || '').trim();
     const password = String(body.password || '');
+    const passwordHash = await hashLocalPassword(password);
 
     if (!username || password.length < 6) throw new Error('Username and password (min 6 chars) are required.');
     if (db.users.some((user) => user.username === username)) throw new Error('Username already exists.');
 
-    const user = { id: db.nextUserId++, username, password, token: generateToken() };
+    const user = { id: db.nextUserId++, username, passwordHash, token: generateToken() };
     db.users.push(user);
     db.tasksByUserId[user.id] = [];
     saveLocalDb(db);
@@ -131,7 +154,10 @@ async function localRequest(path, options = {}) {
   if (path === '/api/login' && method === 'POST') {
     const username = String(body.username || '').trim();
     const password = String(body.password || '');
-    const user = db.users.find((candidate) => candidate.username === username && candidate.password === password);
+    const passwordHash = await hashLocalPassword(password);
+    const user = db.users.find(
+      (candidate) => candidate.username === username && candidate.passwordHash === passwordHash,
+    );
     if (!user) throw new Error('Invalid credentials.');
 
     user.token = generateToken();
