@@ -10,6 +10,7 @@ const logoutButton = document.getElementById('logout');
 const tokenKey = 'task-manager-token';
 const userKey = 'task-manager-user';
 let submitMode = 'login';
+let currentTasks = [];
 
 function getToken() {
   return localStorage.getItem(tokenKey);
@@ -48,6 +49,7 @@ async function api(path, options = {}) {
 }
 
 function renderTasks(tasks) {
+  currentTasks = tasks;
   taskList.innerHTML = '';
 
   if (!tasks.length) {
@@ -144,8 +146,7 @@ taskList.addEventListener('click', async (event) => {
     }
 
     if (action === 'toggle') {
-      const tasksPayload = await api('/api/tasks');
-      const task = tasksPayload.tasks.find((candidate) => String(candidate.id) === String(taskId));
+      const task = currentTasks.find((candidate) => String(candidate.id) === String(taskId));
       if (!task) throw new Error('Task not found');
 
       await api(`/api/tasks/${taskId}`, {

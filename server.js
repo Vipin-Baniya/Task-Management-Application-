@@ -5,6 +5,9 @@ const crypto = require('crypto');
 const { URL } = require('url');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
+if (process.env.NODE_ENV === 'production' && !process.env.APP_SECRET) {
+  throw new Error('APP_SECRET must be set in production.');
+}
 const SECRET = process.env.APP_SECRET || 'dev-secret-change-me';
 
 function createStore() {
