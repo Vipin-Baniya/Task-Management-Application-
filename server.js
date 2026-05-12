@@ -9,7 +9,7 @@ if (process.env.NODE_ENV === 'production' && !process.env.APP_SECRET) {
   throw new Error('APP_SECRET must be set in production.');
 }
 const SECRET = process.env.APP_SECRET || 'dev-secret-change-me';
-const PBKDF2_ITERATIONS = 600000;
+const PBKDF2_HASH_ITERATIONS = 600000;
 
 function createStore() {
   return {
@@ -22,7 +22,7 @@ function createStore() {
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
   const hash = crypto
-    .pbkdf2Sync(password, salt, PBKDF2_ITERATIONS, 64, 'sha512')
+    .pbkdf2Sync(password, salt, PBKDF2_HASH_ITERATIONS, 64, 'sha512')
     .toString('hex');
   return { salt, hash };
 }
