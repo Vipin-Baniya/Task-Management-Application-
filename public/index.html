@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Fast and stylish task manager that runs locally and on GitHub Pages." />
+    <title>TaskFlow</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <section class="hero card">
+        <p class="badge">TaskFlow</p>
+        <h1>Fast, stylish task tracking</h1>
+        <p class="hero-copy">Use API mode on localhost and instant local mode on GitHub Pages.</p>
+      </section>
+
+      <section class="card" id="auth-section">
+        <h2>Get started</h2>
+        <p class="muted">Create an account or sign in to manage your tasks.</p>
+        <form id="auth-form" class="stack">
+          <label>
+            Username
+            <input id="username" required minlength="2" autocomplete="username" />
+          </label>
+          <label>
+            Password
+            <input id="password" type="password" required minlength="6" autocomplete="current-password" />
+          </label>
+          <div class="actions">
+            <button type="submit" data-mode="login">Login</button>
+            <button type="submit" data-mode="register" class="secondary">Register</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card hidden" id="app-section">
+        <div class="header-row">
+          <h2 id="welcome"></h2>
+          <div class="row">
+            <span class="badge muted-badge" id="mode-badge"></span>
+            <button id="logout" class="secondary">Logout</button>
+          </div>
+        </div>
+
+        <form id="task-form" class="grid">
+          <label>
+            Title
+            <input id="task-title" required />
+          </label>
+          <label>
+            Due date
+            <input id="task-due-date" type="date" />
+          </label>
+          <label>
+            Status
+            <select id="task-status">
+              <option value="todo">To Do</option>
+              <option value="done">Done</option>
+            </select>
+          </label>
+          <label class="full">
+            Description
+            <textarea id="task-description" rows="3"></textarea>
+          </label>
+          <button type="submit">Add task</button>
+        </form>
+
+        <div class="controls">
+          <label>
+            Filter
+            <select id="filter-status">
+              <option value="all">All</option>
+              <option value="todo">To Do</option>
+              <option value="done">Done</option>
+            </select>
+          </label>
+        </div>
+
+        <ul id="task-list" class="task-list"></ul>
+      </section>
+
+      <p id="message" role="status"></p>
+    </main>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
