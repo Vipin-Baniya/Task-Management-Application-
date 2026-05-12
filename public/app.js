@@ -118,7 +118,7 @@ taskForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   const title = document.getElementById('task-title').value;
   const description = document.getElementById('task-description').value;
-  const dueDate = document.getElementById('task-dueDate').value;
+  const dueDate = document.getElementById('task-due-date').value;
 
   try {
     await api('/api/tasks', {
