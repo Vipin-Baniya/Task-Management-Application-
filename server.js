@@ -309,7 +309,8 @@ function createApp(customStore) {
               progress,
               updatedAt: new Date().toISOString(),
             };
-            if (!isValidDueDate(updated.startDate || '')) {
+            const startDate = typeof updated.startDate === 'string' ? updated.startDate : '';
+            if (!isValidDueDate(startDate)) {
               sendJson(res, 400, { error: 'Start date must use YYYY-MM-DD format.' });
               return;
             }
@@ -317,7 +318,7 @@ function createApp(customStore) {
               sendJson(res, 400, { error: 'Due date must use YYYY-MM-DD format.' });
               return;
             }
-            if ((updated.startDate || '') && updated.dueDate && updated.startDate > updated.dueDate) {
+            if (startDate && updated.dueDate && startDate > updated.dueDate) {
               sendJson(res, 400, { error: 'Start date cannot be after due date.' });
               return;
             }
