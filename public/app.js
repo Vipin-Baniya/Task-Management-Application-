@@ -6,11 +6,37 @@ const taskList = document.getElementById('task-list');
 const message = document.getElementById('message');
 const welcome = document.getElementById('welcome');
 const logoutButton = document.getElementById('logout');
+const modeBadge = document.getElementById('mode-badge');
+const filterStatus = document.getElementById('filter-status');
 
 const tokenKey = 'task-manager-token';
 const userKey = 'task-manager-user';
+const modeKey = 'task-manager-mode';
+const localDbKey = 'task-manager-local-db';
+
 let submitMode = 'login';
 let currentTasks = [];
+
+function getRuntimeMode() {
+  const params = new URLSearchParams(window.location.search);
+  const forced = params.get('mode');
+  if (forced === 'api' || forced === 'local') return forced;
+
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'api';
+  }
+
+  return 'local';
+}
+
+function getMode() {
+  return localStorage.getItem(modeKey) || getRuntimeMode();
+}
+
+function setMode(mode) {
+  localStorage.setItem(modeKey, mode);
+  modeBadge.textContent = mode === 'api' ? 'API mode' : 'GitHub Pages mode';
+}
 
 function getToken() {
   return localStorage.getItem(tokenKey);
@@ -27,11 +53,40 @@ function clearSession() {
 }
 
 function showMessage(text, isError = true) {
-  message.style.color = isError ? '#b91c1c' : '#166534';
+  message.style.color = isError ? '#fecaca' : '#dcfce7';
   message.textContent = text;
 }
 
-async function api(path, options = {}) {
+function generateToken() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function loadLocalDb() {
+  const raw = localStorage.getItem(localDbKey);
+  if (!raw) {
+    return { users: [], tasksByUserId: {}, nextUserId: 1, nextTaskId: 1 };
+  }
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return { users: [], tasksByUserId: {}, nextUserId: 1, nextTaskId: 1 };
+  }
+}
+
+function saveLocalDb(db) {
+  localStorage.setItem(localDbKey, JSON.stringify(db));
+}
+
+function normalizeDueDate(value) {
+  return typeof value === 'string' ? value : '';
+}
+
+function mapUserView(user) {
+  return { id: user.id, username: user.username };
+}
+
+async function apiRequest(path, options = {}) {
   const token = getToken();
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
   if (token) {
@@ -48,33 +103,180 @@ async function api(path, options = {}) {
   return payload;
 }
 
+function localAuthFromToken(db, token) {
+  return db.users.find((user) => user.token === token) || null;
+}
+
+async function localRequest(path, options = {}) {
+  const method = options.method || 'GET';
+  const body = options.body ? JSON.parse(options.body) : {};
+  const token = getToken();
+  const db = loadLocalDb();
+
+  if (path === '/api/register' && method === 'POST') {
+    const username = String(body.username || '').trim();
+    const password = String(body.password || '');
+
+    if (!username || password.length < 6) throw new Error('Username and password (min 6 chars) are required.');
+    if (db.users.some((user) => user.username === username)) throw new Error('Username already exists.');
+
+    const user = { id: db.nextUserId++, username, password, token: generateToken() };
+    db.users.push(user);
+    db.tasksByUserId[user.id] = [];
+    saveLocalDb(db);
+
+    return { token: user.token, user: mapUserView(user) };
+  }
+
+  if (path === '/api/login' && method === 'POST') {
+    const username = String(body.username || '').trim();
+    const password = String(body.password || '');
+    const user = db.users.find((candidate) => candidate.username === username && candidate.password === password);
+    if (!user) throw new Error('Invalid credentials.');
+
+    user.token = generateToken();
+    saveLocalDb(db);
+    return { token: user.token, user: mapUserView(user) };
+  }
+
+  const authUser = localAuthFromToken(db, token);
+  if (!authUser) throw new Error('Unauthorized');
+
+  if (path === '/api/me' && method === 'GET') {
+    return { user: mapUserView(authUser) };
+  }
+
+  if (path === '/api/tasks' && method === 'GET') {
+    return { tasks: db.tasksByUserId[authUser.id] || [] };
+  }
+
+  if (path === '/api/tasks' && method === 'POST') {
+    const title = String(body.title || '').trim();
+    if (!title) throw new Error('Title is required.');
+
+    const task = {
+      id: db.nextTaskId++,
+      title,
+      description: String(body.description || '').trim(),
+      status: body.status === 'done' ? 'done' : 'todo',
+      dueDate: normalizeDueDate(body.dueDate),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    db.tasksByUserId[authUser.id] = [task, ...(db.tasksByUserId[authUser.id] || [])];
+    saveLocalDb(db);
+    return { task };
+  }
+
+  const match = path.match(/^\/api\/tasks\/(\d+)$/);
+  if (match) {
+    const taskId = Number(match[1]);
+    const tasks = db.tasksByUserId[authUser.id] || [];
+    const index = tasks.findIndex((task) => task.id === taskId);
+    if (index === -1) throw new Error('Task not found.');
+
+    if (method === 'PUT') {
+      const current = tasks[index];
+      const updated = {
+        ...current,
+        title: body.title !== undefined ? String(body.title).trim() : current.title,
+        description: body.description !== undefined ? String(body.description).trim() : current.description,
+        status: body.status === 'done' || body.status === 'todo' ? body.status : current.status,
+        dueDate: body.dueDate !== undefined ? normalizeDueDate(body.dueDate) : current.dueDate,
+        updatedAt: new Date().toISOString(),
+      };
+      if (!updated.title) throw new Error('Title is required.');
+      tasks[index] = updated;
+      saveLocalDb(db);
+      return { task: updated };
+    }
+
+    if (method === 'DELETE') {
+      tasks.splice(index, 1);
+      saveLocalDb(db);
+      return {};
+    }
+  }
+
+  throw new Error('Route not found');
+}
+
+async function request(path, options = {}) {
+  const mode = getMode();
+  if (mode === 'local') {
+    return localRequest(path, options);
+  }
+
+  try {
+    return await apiRequest(path, options);
+  } catch (error) {
+    if (String(error.message).toLowerCase().includes('failed to fetch')) {
+      setMode('local');
+      return localRequest(path, options);
+    }
+    throw error;
+  }
+}
+
+function createTaskNode(task) {
+  const item = document.createElement('li');
+  item.className = `task-item ${task.status}`;
+
+  const title = document.createElement('h3');
+  title.className = 'task-title';
+  title.textContent = task.title;
+
+  const description = document.createElement('p');
+  description.className = 'muted';
+  description.textContent = task.description || 'No description';
+
+  const meta = document.createElement('p');
+  meta.className = 'task-meta';
+  meta.textContent = `Due: ${task.dueDate || 'Not set'} • ${task.status === 'done' ? 'Done' : 'To Do'}`;
+
+  const actions = document.createElement('div');
+  actions.className = 'row';
+
+  const toggle = document.createElement('button');
+  toggle.dataset.action = 'toggle';
+  toggle.dataset.id = String(task.id);
+  toggle.textContent = task.status === 'done' ? 'Mark as To Do' : 'Mark as Done';
+
+  const remove = document.createElement('button');
+  remove.dataset.action = 'delete';
+  remove.dataset.id = String(task.id);
+  remove.className = 'secondary';
+  remove.textContent = 'Delete';
+
+  actions.append(toggle, remove);
+  item.append(title, description, meta, actions);
+  return item;
+}
+
 function renderTasks(tasks) {
   currentTasks = tasks;
-  taskList.innerHTML = '';
+  const selectedFilter = filterStatus.value;
+  const visibleTasks = selectedFilter === 'all' ? tasks : tasks.filter((task) => task.status === selectedFilter);
 
-  if (!tasks.length) {
-    taskList.innerHTML = '<li class="task-item">No tasks yet. Add one above.</li>';
+  taskList.innerHTML = '';
+  if (!visibleTasks.length) {
+    const empty = document.createElement('li');
+    empty.className = 'task-item';
+    empty.textContent = 'No matching tasks yet. Add one above.';
+    taskList.appendChild(empty);
     return;
   }
 
-  tasks.forEach((task) => {
-    const item = document.createElement('li');
-    item.className = `task-item ${task.status}`;
-    item.innerHTML = `
-      <strong>${task.title}</strong>
-      <span>${task.description || 'No description'}</span>
-      <small>Due: ${task.dueDate || 'Not set'}</small>
-      <div class="row">
-        <button data-action="toggle" data-id="${task.id}">${task.status === 'done' ? 'Mark as To Do' : 'Mark as Done'}</button>
-        <button data-action="delete" data-id="${task.id}" class="secondary">Delete</button>
-      </div>
-    `;
-    taskList.appendChild(item);
+  const fragment = document.createDocumentFragment();
+  visibleTasks.forEach((task) => {
+    fragment.appendChild(createTaskNode(task));
   });
+  taskList.appendChild(fragment);
 }
 
 async function loadTasks() {
-  const { tasks } = await api('/api/tasks');
+  const { tasks } = await request('/api/tasks');
   renderTasks(tasks);
 }
 
@@ -94,13 +296,17 @@ authForm.addEventListener('click', (event) => {
   submitMode = button.dataset.mode;
 });
 
+filterStatus.addEventListener('change', () => {
+  renderTasks(currentTasks);
+});
+
 authForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   const username = document.getElementById('username').value;
   const password = document.getElementById('password').value;
 
   try {
-    const data = await api(`/api/${submitMode}`, {
+    const data = await request(`/api/${submitMode}`, {
       method: 'POST',
       body: JSON.stringify({ username, password }),
     });
@@ -119,11 +325,12 @@ taskForm.addEventListener('submit', async (event) => {
   const title = document.getElementById('task-title').value;
   const description = document.getElementById('task-description').value;
   const dueDate = document.getElementById('task-due-date').value;
+  const status = document.getElementById('task-status').value;
 
   try {
-    await api('/api/tasks', {
+    await request('/api/tasks', {
       method: 'POST',
-      body: JSON.stringify({ title, description, dueDate }),
+      body: JSON.stringify({ title, description, dueDate, status }),
     });
     taskForm.reset();
     await loadTasks();
@@ -142,14 +349,14 @@ taskList.addEventListener('click', async (event) => {
 
   try {
     if (action === 'delete') {
-      await api(`/api/tasks/${taskId}`, { method: 'DELETE' });
+      await request(`/api/tasks/${taskId}`, { method: 'DELETE' });
     }
 
     if (action === 'toggle') {
       const task = currentTasks.find((t) => String(t.id) === String(taskId));
       if (!task) throw new Error('Task not found');
 
-      await api(`/api/tasks/${taskId}`, {
+      await request(`/api/tasks/${taskId}`, {
         method: 'PUT',
         body: JSON.stringify({ status: task.status === 'done' ? 'todo' : 'done' }),
       });
@@ -170,6 +377,8 @@ logoutButton.addEventListener('click', () => {
 });
 
 (async function init() {
+  setMode(getMode());
+
   const token = getToken();
   if (!token) {
     setView(false);
@@ -177,7 +386,7 @@ logoutButton.addEventListener('click', () => {
   }
 
   try {
-    const data = await api('/api/me');
+    const data = await request('/api/me');
     setSession(token, data.user);
     setView(true);
     await loadTasks();
