@@ -273,7 +273,8 @@ function createApp(customStore) {
 
           if (req.method === 'DELETE') {
             tasks.splice(index, 1);
-            sendJson(res, 204, {});
+            res.writeHead(204);
+            res.end();
             return;
           }
         }
