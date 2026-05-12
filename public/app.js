@@ -1,3 +1,5 @@
+import { detectRuntimeMode } from './runtime-mode.mjs';
+
 const authSection = document.getElementById('auth-section');
 const appSection = document.getElementById('app-section');
 const authForm = document.getElementById('auth-form');
@@ -20,13 +22,7 @@ let currentTasks = [];
 function getRuntimeMode() {
   const params = new URLSearchParams(window.location.search);
   const forced = params.get('mode');
-  if (forced === 'api' || forced === 'local') return forced;
-
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return 'api';
-  }
-
-  return 'local';
+  return detectRuntimeMode(window.location.hostname, forced);
 }
 
 function getMode() {
@@ -74,13 +70,13 @@ function generateToken() {
 }
 
 async function hashLocalPassword(password) {
-  if (window.crypto?.subtle) {
-    const encoded = new TextEncoder().encode(password);
-    const digest = await window.crypto.subtle.digest('SHA-256', encoded);
-    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  if (!window.crypto?.subtle) {
+    throw new Error('Secure hashing is unavailable in this browser.');
   }
 
-  return btoa(unescape(encodeURIComponent(password)));
+  const encoded = new TextEncoder().encode(password);
+  const digest = await window.crypto.subtle.digest('SHA-256', encoded);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 function loadLocalDb() {

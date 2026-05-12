@@ -6,7 +6,9 @@ const { URL } = require('url');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 if (process.env.NODE_ENV === 'production' && !process.env.APP_SECRET) {
-  throw new Error('APP_SECRET must be set in production.');
+  throw new Error(
+    'APP_SECRET must be set in production. Generate one with `openssl rand -hex 32`.',
+  );
 }
 const SECRET = process.env.APP_SECRET || 'dev-secret-change-me';
 const PBKDF2_HASH_ITERATIONS = 600000;
