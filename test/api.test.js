@@ -50,12 +50,21 @@ test('register/login and task CRUD are protected and user-scoped', async () => {
       '/api/tasks',
       {
         method: 'POST',
-        body: JSON.stringify({ title: 'Write tests', description: 'For task app' }),
+        body: JSON.stringify({
+          title: 'Write tests',
+          project: 'Backend',
+          description: 'For task app',
+          startDate: '2026-01-01',
+          dueDate: '2026-01-10',
+          progress: 30,
+        }),
       },
       register.body.token,
     );
     assert.equal(createTask.status, 201);
     assert.equal(createTask.body.task.title, 'Write tests');
+    assert.equal(createTask.body.task.project, 'Backend');
+    assert.equal(createTask.body.task.progress, 30);
 
     const invalidDueDate = await request(
       server.baseUrl,
@@ -68,6 +77,28 @@ test('register/login and task CRUD are protected and user-scoped', async () => {
     );
     assert.equal(invalidDueDate.status, 400);
 
+    const invalidProgress = await request(
+      server.baseUrl,
+      '/api/tasks',
+      {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Bad progress', progress: 120 }),
+      },
+      register.body.token,
+    );
+    assert.equal(invalidProgress.status, 400);
+
+    const invalidSchedule = await request(
+      server.baseUrl,
+      '/api/tasks',
+      {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Bad schedule', startDate: '2026-02-10', dueDate: '2026-02-01' }),
+      },
+      register.body.token,
+    );
+    assert.equal(invalidSchedule.status, 400);
+
     const list = await request(server.baseUrl, '/api/tasks', {}, register.body.token);
     assert.equal(list.status, 200);
     assert.equal(list.body.tasks.length, 1);
@@ -77,12 +108,13 @@ test('register/login and task CRUD are protected and user-scoped', async () => {
       `/api/tasks/${createTask.body.task.id}`,
       {
         method: 'PUT',
-        body: JSON.stringify({ status: 'done' }),
+        body: JSON.stringify({ status: 'done', progress: 100 }),
       },
       register.body.token,
     );
     assert.equal(update.status, 200);
     assert.equal(update.body.task.status, 'done');
+    assert.equal(update.body.task.progress, 100);
 
     const bob = await request(server.baseUrl, '/api/register', {
       method: 'POST',

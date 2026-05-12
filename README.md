@@ -7,6 +7,8 @@ A fast, stylish task management web app that works in two modes:
 ## Features
 - User registration/login and authorization
 - Task CRUD (create, read, update, delete)
+- Project scheduling with start and due dates
+- Progress tracking with percentage and summary dashboard
 - Responsive and modern UI for mobile and desktop
 - GitHub Pages hosting support via workflow
 

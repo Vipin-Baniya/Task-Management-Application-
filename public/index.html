@@ -49,6 +49,14 @@
             <input id="task-title" required />
           </label>
           <label>
+            Project
+            <input id="task-project" placeholder="Website redesign" />
+          </label>
+          <label>
+            Start date
+            <input id="task-start-date" type="date" />
+          </label>
+          <label>
             Due date
             <input id="task-due-date" type="date" />
           </label>
@@ -59,12 +67,34 @@
               <option value="done">Done</option>
             </select>
           </label>
+          <label>
+            Progress (%)
+            <input id="task-progress" type="number" min="0" max="100" value="0" />
+          </label>
           <label class="full">
             Description
             <textarea id="task-description" rows="3"></textarea>
           </label>
           <button type="submit">Add task</button>
         </form>
+
+        <section class="summary" aria-label="Project progress summary">
+          <div class="summary-item">
+            <p class="muted">Total tasks</p>
+            <strong id="summary-total">0</strong>
+          </div>
+          <div class="summary-item">
+            <p class="muted">Done tasks</p>
+            <strong id="summary-done">0</strong>
+          </div>
+          <div class="summary-item full">
+            <div class="row">
+              <p class="muted">Average progress</p>
+              <strong id="summary-average">0%</strong>
+            </div>
+            <progress id="summary-progress" max="100" value="0"></progress>
+          </div>
+        </section>
 
         <div class="controls">
           <label>
