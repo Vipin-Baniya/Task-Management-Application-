@@ -71,6 +71,10 @@ function isValidDueDate(value) {
   return value === '' || /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
+function isValidProgress(value) {
+  return Number.isInteger(value) && value >= 0 && value <= 100;
+}
+
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
     let data = '';
@@ -222,16 +226,31 @@ function createApp(customStore) {
         if (pathname === '/api/tasks' && req.method === 'POST') {
           const body = await readJsonBody(req);
           const title = typeof body.title === 'string' ? body.title.trim() : '';
+          const project = typeof body.project === 'string' ? body.project.trim() : '';
           const description = typeof body.description === 'string' ? body.description.trim() : '';
           const status = body.status === 'done' ? 'done' : 'todo';
+          const startDate = typeof body.startDate === 'string' ? body.startDate : '';
           const dueDate = typeof body.dueDate === 'string' ? body.dueDate : '';
+          const progress = body.progress === undefined ? (status === 'done' ? 100 : 0) : body.progress;
 
           if (!title) {
             sendJson(res, 400, { error: 'Title is required.' });
             return;
           }
+          if (!isValidDueDate(startDate)) {
+            sendJson(res, 400, { error: 'Start date must use YYYY-MM-DD format.' });
+            return;
+          }
           if (!isValidDueDate(dueDate)) {
             sendJson(res, 400, { error: 'Due date must use YYYY-MM-DD format.' });
+            return;
+          }
+          if (startDate && dueDate && startDate > dueDate) {
+            sendJson(res, 400, { error: 'Start date cannot be after due date.' });
+            return;
+          }
+          if (!isValidProgress(progress)) {
+            sendJson(res, 400, { error: 'Progress must be an integer from 0 to 100.' });
             return;
           }
 
@@ -239,9 +258,12 @@ function createApp(customStore) {
           const task = {
             id: store.nextTaskId++,
             title,
+            project,
             description,
             status,
+            startDate,
             dueDate,
+            progress,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           };
@@ -267,6 +289,8 @@ function createApp(customStore) {
             const body = await readJsonBody(req);
             const existing = tasks[index];
             const title = typeof body.title === 'string' ? body.title.trim() : existing.title;
+            const status = body.status === 'done' ? 'done' : body.status === 'todo' ? 'todo' : existing.status;
+            const progress = body.progress !== undefined ? body.progress : existing.progress;
 
             if (!title) {
               sendJson(res, 400, { error: 'Title is required.' });
@@ -276,14 +300,29 @@ function createApp(customStore) {
             const updated = {
               ...existing,
               title,
+              project: typeof body.project === 'string' ? body.project.trim() : existing.project,
               description:
                 typeof body.description === 'string' ? body.description.trim() : existing.description,
-              status: body.status === 'done' ? 'done' : body.status === 'todo' ? 'todo' : existing.status,
+              status,
+              startDate: typeof body.startDate === 'string' ? body.startDate : existing.startDate,
               dueDate: typeof body.dueDate === 'string' ? body.dueDate : existing.dueDate,
+              progress,
               updatedAt: new Date().toISOString(),
             };
+            if (!isValidDueDate(updated.startDate || '')) {
+              sendJson(res, 400, { error: 'Start date must use YYYY-MM-DD format.' });
+              return;
+            }
             if (!isValidDueDate(updated.dueDate)) {
               sendJson(res, 400, { error: 'Due date must use YYYY-MM-DD format.' });
+              return;
+            }
+            if ((updated.startDate || '') && updated.dueDate && updated.startDate > updated.dueDate) {
+              sendJson(res, 400, { error: 'Start date cannot be after due date.' });
+              return;
+            }
+            if (!isValidProgress(updated.progress)) {
+              sendJson(res, 400, { error: 'Progress must be an integer from 0 to 100.' });
               return;
             }
             tasks[index] = updated;

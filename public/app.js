@@ -10,6 +10,10 @@ const welcome = document.getElementById('welcome');
 const logoutButton = document.getElementById('logout');
 const modeBadge = document.getElementById('mode-badge');
 const filterStatus = document.getElementById('filter-status');
+const summaryTotal = document.getElementById('summary-total');
+const summaryDone = document.getElementById('summary-done');
+const summaryAvg = document.getElementById('summary-average');
+const summaryBar = document.getElementById('summary-progress');
 
 const tokenKey = 'task-manager-token';
 const userKey = 'task-manager-user';
@@ -100,6 +104,15 @@ function normalizeDueDate(value) {
   return typeof value === 'string' ? value : '';
 }
 
+function normalizeProgress(value, fallback = 0) {
+  if (Number.isInteger(value) && value >= 0 && value <= 100) return value;
+  return fallback;
+}
+
+function isValidDate(value) {
+  return value === '' || /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
 function mapUserView(user) {
   return { id: user.id, username: user.username };
 }
@@ -175,13 +188,26 @@ async function localRequest(path, options = {}) {
   if (path === '/api/tasks' && method === 'POST') {
     const title = String(body.title || '').trim();
     if (!title) throw new Error('Title is required.');
+    const startDate = normalizeDueDate(body.startDate);
+    const dueDate = normalizeDueDate(body.dueDate);
+    if (!isValidDate(startDate)) throw new Error('Start date must use YYYY-MM-DD format.');
+    if (!isValidDate(dueDate)) throw new Error('Due date must use YYYY-MM-DD format.');
+    if (startDate && dueDate && startDate > dueDate) throw new Error('Start date cannot be after due date.');
+    const status = body.status === 'done' ? 'done' : 'todo';
+    const progress = body.progress === undefined ? (status === 'done' ? 100 : 0) : Number(body.progress);
+    if (!Number.isInteger(progress) || progress < 0 || progress > 100) {
+      throw new Error('Progress must be an integer from 0 to 100.');
+    }
 
     const task = {
       id: db.nextTaskId++,
       title,
+      project: String(body.project || '').trim(),
       description: String(body.description || '').trim(),
-      status: body.status === 'done' ? 'done' : 'todo',
-      dueDate: normalizeDueDate(body.dueDate),
+      status,
+      startDate,
+      dueDate,
+      progress,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -200,15 +226,27 @@ async function localRequest(path, options = {}) {
 
     if (method === 'PUT') {
       const current = tasks[index];
+      const nextStatus = body.status === 'done' || body.status === 'todo' ? body.status : current.status;
       const updated = {
         ...current,
         title: body.title !== undefined ? String(body.title).trim() : current.title,
+        project: body.project !== undefined ? String(body.project).trim() : current.project,
         description: body.description !== undefined ? String(body.description).trim() : current.description,
-        status: body.status === 'done' || body.status === 'todo' ? body.status : current.status,
+        status: nextStatus,
+        startDate: body.startDate !== undefined ? normalizeDueDate(body.startDate) : normalizeDueDate(current.startDate),
         dueDate: body.dueDate !== undefined ? normalizeDueDate(body.dueDate) : current.dueDate,
+        progress: body.progress !== undefined ? Number(body.progress) : normalizeProgress(current.progress),
         updatedAt: new Date().toISOString(),
       };
       if (!updated.title) throw new Error('Title is required.');
+      if (!isValidDate(updated.startDate)) throw new Error('Start date must use YYYY-MM-DD format.');
+      if (!isValidDate(updated.dueDate)) throw new Error('Due date must use YYYY-MM-DD format.');
+      if (updated.startDate && updated.dueDate && updated.startDate > updated.dueDate) {
+        throw new Error('Start date cannot be after due date.');
+      }
+      if (!Number.isInteger(updated.progress) || updated.progress < 0 || updated.progress > 100) {
+        throw new Error('Progress must be an integer from 0 to 100.');
+      }
       tasks[index] = updated;
       saveLocalDb(db);
       return { task: updated };
@@ -255,7 +293,19 @@ function createTaskNode(task) {
 
   const meta = document.createElement('p');
   meta.className = 'task-meta';
-  meta.textContent = `Due: ${task.dueDate || 'Not set'} • ${task.status === 'done' ? 'Done' : 'To Do'}`;
+  const project = task.project || 'General';
+  const schedule = `${task.startDate || 'Not set'} → ${task.dueDate || 'Not set'}`;
+  meta.textContent = `Project: ${project} • Schedule: ${schedule} • ${task.status === 'done' ? 'Done' : 'To Do'}`;
+
+  const progressWrap = document.createElement('div');
+  progressWrap.className = 'task-progress';
+  const progressText = document.createElement('span');
+  progressText.className = 'task-meta';
+  progressText.textContent = `Progress: ${normalizeProgress(task.progress)}%`;
+  const progressBar = document.createElement('progress');
+  progressBar.max = 100;
+  progressBar.value = normalizeProgress(task.progress);
+  progressWrap.append(progressText, progressBar);
 
   const actions = document.createElement('div');
   actions.className = 'row';
@@ -272,12 +322,26 @@ function createTaskNode(task) {
   remove.textContent = 'Delete';
 
   actions.append(toggle, remove);
-  item.append(title, description, meta, actions);
+  item.append(title, description, meta, progressWrap, actions);
   return item;
+}
+
+function renderSummary(tasks) {
+  const total = tasks.length;
+  const done = tasks.filter((task) => task.status === 'done').length;
+  const average = total
+    ? Math.round(tasks.reduce((sum, task) => sum + normalizeProgress(task.progress), 0) / total)
+    : 0;
+
+  summaryTotal.textContent = String(total);
+  summaryDone.textContent = String(done);
+  summaryAvg.textContent = `${average}%`;
+  summaryBar.value = average;
 }
 
 function renderTasks(tasks) {
   currentTasks = tasks;
+  renderSummary(tasks);
   const selectedFilter = filterStatus.value;
   const visibleTasks = selectedFilter === 'all' ? tasks : tasks.filter((task) => task.status === selectedFilter);
 
@@ -345,14 +409,17 @@ authForm.addEventListener('submit', async (event) => {
 taskForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   const title = document.getElementById('task-title').value;
+  const project = document.getElementById('task-project').value;
   const description = document.getElementById('task-description').value;
+  const startDate = document.getElementById('task-start-date').value;
   const dueDate = document.getElementById('task-due-date').value;
   const status = document.getElementById('task-status').value;
+  const progress = Number(document.getElementById('task-progress').value);
 
   try {
     await request('/api/tasks', {
       method: 'POST',
-      body: JSON.stringify({ title, description, dueDate, status }),
+      body: JSON.stringify({ title, project, description, startDate, dueDate, status, progress }),
     });
     taskForm.reset();
     await loadTasks();
@@ -380,7 +447,10 @@ taskList.addEventListener('click', async (event) => {
 
       await request(`/api/tasks/${taskId}`, {
         method: 'PUT',
-        body: JSON.stringify({ status: task.status === 'done' ? 'todo' : 'done' }),
+        body: JSON.stringify({
+          status: task.status === 'done' ? 'todo' : 'done',
+          progress: task.status === 'done' ? 0 : 100,
+        }),
       });
     }
 
