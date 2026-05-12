@@ -57,6 +57,17 @@ test('register/login and task CRUD are protected and user-scoped', async () => {
     assert.equal(createTask.status, 201);
     assert.equal(createTask.body.task.title, 'Write tests');
 
+    const invalidDueDate = await request(
+      server.baseUrl,
+      '/api/tasks',
+      {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Bad due date', dueDate: '13-01-2026' }),
+      },
+      register.body.token,
+    );
+    assert.equal(invalidDueDate.status, 400);
+
     const list = await request(server.baseUrl, '/api/tasks', {}, register.body.token);
     assert.equal(list.status, 200);
     assert.equal(list.body.tasks.length, 1);

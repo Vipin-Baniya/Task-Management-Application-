@@ -65,6 +65,10 @@ function sendText(res, status, text) {
   res.end(text);
 }
 
+function isValidDueDate(value) {
+  return value === '' || /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
     let data = '';
@@ -224,6 +228,10 @@ function createApp(customStore) {
             sendJson(res, 400, { error: 'Title is required.' });
             return;
           }
+          if (!isValidDueDate(dueDate)) {
+            sendJson(res, 400, { error: 'Due date must use YYYY-MM-DD format.' });
+            return;
+          }
 
           const tasks = store.tasksByUserId.get(authUser.id) || [];
           const task = {
@@ -272,6 +280,10 @@ function createApp(customStore) {
               dueDate: typeof body.dueDate === 'string' ? body.dueDate : existing.dueDate,
               updatedAt: new Date().toISOString(),
             };
+            if (!isValidDueDate(updated.dueDate)) {
+              sendJson(res, 400, { error: 'Due date must use YYYY-MM-DD format.' });
+              return;
+            }
             tasks[index] = updated;
             sendJson(res, 200, { task: updated });
             return;
