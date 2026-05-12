@@ -146,7 +146,7 @@ taskList.addEventListener('click', async (event) => {
     }
 
     if (action === 'toggle') {
-      const task = currentTasks.find((candidate) => String(candidate.id) === String(taskId));
+      const task = currentTasks.find((currentTask) => String(currentTask.id) === String(taskId));
       if (!task) throw new Error('Task not found');
 
       await api(`/api/tasks/${taskId}`, {
