@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Task Manager</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <section class="card" id="auth-section">
+        <h1>Task Management Application</h1>
+        <p>Create an account or sign in to manage your tasks.</p>
+        <form id="auth-form" class="stack">
+          <label>
+            Username
+            <input id="username" required minlength="2" />
+          </label>
+          <label>
+            Password
+            <input id="password" type="password" required minlength="6" />
+          </label>
+          <div class="actions">
+            <button type="submit" data-mode="login">Login</button>
+            <button type="submit" data-mode="register" class="secondary">Register</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card hidden" id="app-section">
+        <div class="header-row">
+          <h2 id="welcome"></h2>
+          <button id="logout" class="secondary">Logout</button>
+        </div>
+        <form id="task-form" class="grid">
+          <label>
+            Title
+            <input id="task-title" required />
+          </label>
+          <label>
+            Due date
+            <input id="task-dueDate" type="date" />
+          </label>
+          <label class="full">
+            Description
+            <textarea id="task-description" rows="3"></textarea>
+          </label>
+          <button type="submit">Add task</button>
+        </form>
+        <ul id="task-list" class="task-list"></ul>
+      </section>
+
+      <p id="message" role="status"></p>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
